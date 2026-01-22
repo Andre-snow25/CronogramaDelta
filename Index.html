@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cronograma Formação Delegado 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body{font-family:system-ui}
+.fade{animation:f .3s}
+@keyframes f{from{opacity:0}to{opacity:1}}
+.tab-active{border-bottom:3px solid #4f46e5;color:#4f46e5}
+textarea{resize:vertical;min-height:60px}
+.sync-indicator{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+</style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen p-4">
+<div id="n" class="fixed top-4 right-4 z-50"></div>
+<div id="sync-status" class="fixed top-4 left-4 z-50"></div>
+<div id="app" class="max-w-7xl mx-auto"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD2d9bFtE-29MegN1xG9NOf776Rx8Lfgrs",
+  authDomain: "cronograma-d352c.firebaseapp.com",
+  projectId: "cronograma-d352c",
+  storageBucket: "cronograma-d352c.firebasestorage.app",
+  messagingSenderId: "1035295977614",
+  appId: "1:1035295977614:web:e4ef9bfd959470f0b759df"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let userId = localStorage.getItem('userId_delegado');
+if (!userId) {
+  userId = 'delegado_' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem('userId_delegado', userId);
+}
+
+let e={aba:'plano',estudos:[],revs:[],stats:{a:0,e:0,r:0},cron:[],obs:{}};
+let isLoading = true;
+
+// Disciplinas do curso
+const disciplinas = [
+  {disc: 'I', nome: 'Teoria Geral do Estado', av: 1, aulas: [
+    'Gestão de Patrimônio, Materiais e Frota',
+    'Gestão de Recursos Humanos',
+    'Noções Gerais de Licitações e Contratos Administrativos',
+    'Gestão Institucional'
+  ]},
+  {disc: 'I', nome: 'Gestão de Atendimento ao Público e Compliance', av: 2, aulas: ['Compliance e Atendimento']},
+  {disc: 'I', nome: 'Ética Policial', av: 2, aulas: ['Ética Policial']},
+  
+  {disc: 'II', nome: 'Teoria Geral da Investigação', av: 3, aulas: ['Teoria Geral da Investigação']},
+  {disc: 'II', nome: 'Investigação de Crimes contra a Vida, Dignidade Sexual e Tráfico de Pessoas', av: 3, aulas: ['Crimes contra a Vida e Dignidade Sexual']},
+  {disc: 'II', nome: 'Feminicídio e Investigação sob Perspectiva de Gênero', av: 3, aulas: ['Feminicídio e Gênero']},
+  {disc: 'II', nome: 'Investigação de Crimes contra o Patrimônio', av: 3, aulas: ['Crimes contra o Patrimônio']},
+  {disc: 'II', nome: 'Investigação de Crimes da Lei Antidrogas, Org. Criminosas e Lavagem', av: 3, aulas: ['Antidrogas, Org. Criminosas e Lavagem']},
+  {disc: 'II', nome: 'Investigação de Crimes Eletrônicos', av: 3, aulas: ['Crimes Eletrônicos']},
+  {disc: 'II', nome: 'Laboratório de Apreensão de Dispositivos Eletrônicos', av: 3, aulas: ['Lab. Dispositivos Eletrônicos']},
+  {disc: 'II', nome: 'Investigação de Crimes contra o Meio Ambiente', av: 3, aulas: ['Crimes Ambientais']},
+  {disc: 'II', nome: 'Recognição Visuográfica de Local de Crime', av: 3, aulas: ['Recognição Visuográfica']},
+  
+  {disc: 'III', nome: 'Direitos Humanos', av: 4, aulas: ['Direitos Humanos', 'Sistema de Justiça Criminal - Gênero e Orientação Sexual']},
+  {disc: 'III', nome: 'Reconhecimento de Pessoas', av: 5, aulas: ['Reconhecimento de Pessoas']},
+  {disc: 'III', nome: 'Entrevista Investigativa', av: 5, aulas: ['Entrevista Investigativa']},
+  {disc: 'III', nome: 'Depoimento Especial (Lei nº 13.431/17)', av: 5, aulas: ['Depoimento Especial']},
+  {disc: 'III', nome: 'Conduta Policial e Técnicas de Abordagem', av: 6, aulas: ['Técnicas de Abordagem']},
+  
+  {disc: 'IV', nome: 'Comunicação Social', av: 7, aulas: ['Comunicação Social']},
+  {disc: 'IV', nome: 'Inteligência Policial', av: 8, aulas: ['Inteligência Policial']},
+  {disc: 'IV', nome: 'Exercício de Inteligência Policial', av: 9, aulas: ['Exercício de Inteligência']},
+  
+  {disc: 'V/VII', nome: 'Inquérito Policial - Devida Investigação à Luz da CF/88', av: 10, aulas: ['Devida Investigação CF/88']},
+  {disc: 'V/VII', nome: 'Inquérito Policial - Instauração e Diligências', av: 10, aulas: ['Instauração e Diligências']},
+  {disc: 'V/VII', nome: 'Inquérito Policial - Prisão em Flagrante', av: 10, aulas: ['Prisão em Flagrante']},
+  {disc: 'V/VII', nome: 'Inquérito Policial - Medidas Cautelares', av: 10, aulas: ['Medidas Cautelares']},
+  {disc: 'V/VII', nome: 'Inquérito Policial Eletrônico', av: 10, aulas: ['Inquérito Eletrônico']},
+  {disc: 'V/VII', nome: 'Investigação Defensiva', av: 10, aulas: ['Investigação Defensiva']},
+  
+  {disc: 'VI', nome: 'Criminologia e Perfilamento Criminal', av: 11, aulas: ['Criminologia e Perfilamento']},
+  {disc: 'VI', nome: 'Atendimento a Vítimas de Violência Doméstica', av: 12, aulas: ['Violência Doméstica e Dignidade Sexual']},
+  
+  {disc: 'VIII', nome: 'Direito Administrativo Disciplinar', av: 13, aulas: ['Direito Administrativo Disciplinar']},
+  {disc: 'VIII', nome: 'Exercício de Aprendizagem Participativa', av: 14, aulas: ['Exercício Participativo']},
+  {disc: 'VIII', nome: 'Gerenciamento de Crises', av: 15, aulas: ['Gerenciamento de Crises']},
+  {disc: 'VIII', nome: 'Exercício Prático de Gerenciamento', av: 16, aulas: ['Exercício Prático']},
+  
+  {disc: 'IX', nome: 'Metodologia da Pesquisa Científica', av: 17, aulas: ['Metodologia da Pesquisa']},
+  {disc: 'IX', nome: 'Didática do Ensino Superior', av: 18, aulas: ['Didática do Ensino Superior']},
+  
+  {disc: 'XII', nome: 'Armamento, Tiro e Táticas de Confronto', av: 19, aulas: ['Armamento e Táticas']},
+  {disc: 'XII', nome: 'Condicionamento Físico e Defesa Pessoal', av: 20, aulas: ['Condicionamento Físico', 'Defesa Pessoal']},
+  {disc: 'XII', nome: 'Legislação de Trânsito', av: 21, aulas: ['Legislação de Trânsito']},
+  {disc: 'XII', nome: 'Direção Defensiva', av: 22, aulas: ['Direção Defensiva']},
+  {disc: 'XII', nome: 'Primeiros Socorros e Convívio Social no Trânsito', av: 23, aulas: ['Primeiros Socorros e Convívio']},
+  {disc: 'XII', nome: 'Relacionamento Interpessoal', av: 24, aulas: ['Relacionamento Interpessoal']},
+  
+  {disc: 'XII', nome: 'Criminalística - Conceitos Gerais', av: 25, aulas: ['Conceitos Gerais de Criminalística']},
+  {disc: 'XII', nome: 'Criminalística - Toxicologia', av: 25, aulas: ['Exames - Toxicologia']},
+  {disc: 'XII', nome: 'Criminalística - DNA', av: 25, aulas: ['Exames - DNA']},
+  {disc: 'XII', nome: 'Criminalística - Balística', av: 25, aulas: ['Exames - Balística']},
+  {disc: 'XII', nome: 'Criminalística - Exames em Documentos', av: 25, aulas: ['Exames em Documentos']},
+  {disc: 'XII', nome: 'Criminalística - Identificação Veicular', av: 25, aulas: ['Identificação Veicular']},
+  {disc: 'XII', nome: 'Criminalística - Quesitação', av: 25, aulas: ['Fundamentos da Quesitação']},
+  
+  {disc: 'XII', nome: 'Exercício de Polícia Judiciária', av: 26, aulas: ['Exercício de Polícia Judiciária']},
+  {disc: 'XII', nome: 'História da PC e Organização Policial', av: 27, aulas: ['História e Organização']},
+  {disc: 'XII', nome: 'Informática Policial', av: 28, aulas: ['Informática Policial']},
+  {disc: 'XII', nome: 'Medicina Legal', av: 29, aulas: ['Medicina Legal']},
+  {disc: 'XII', nome: 'Organização e Prática Cartorária', av: 30, aulas: ['Prática Cartorária']},
+  {disc: 'XII', nome: 'Papiloscopia', av: 31, aulas: ['Papiloscopia']},
+  {disc: 'XII', nome: 'Redação Oficial', av: 32, aulas: ['Redação Oficial']},
+  {disc: 'XII', nome: 'Socorros de Urgência', av: 33, aulas: ['Socorros de Urgência']},
+  {disc: 'XII', nome: 'Telecomunicações Policiais', av: 34, aulas: ['Telecomunicações Policiais']}
+];
+
+function showSyncStatus(msg, type='info') {
+  const colors = {
+    info: 'bg-blue-500',
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    syncing: 'bg-yellow-500'
+  };
+  const icons = {
+    info: '☁️',
+    success: '✅',
+    error: '❌',
+    syncing: '🔄'
+  };
+  document.getElementById('sync-status').innerHTML = `
+    <div class="${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 ${type === 'syncing' ? 'sync-indicator' : ''}">
+      <span>${icons[type]}</span>
+      <span class="text-sm font-medium">${msg}</span>
+    </div>
+  `;
+  if (type !== 'syncing') {
+    setTimeout(() => {
+      document.getElementById('sync-status').innerHTML = '';
+    }, 3000);
+  }
+}
+
+async function saveToCloud() {
+  try {
+    showSyncStatus('Sincronizando...', 'syncing');
+    const docRef = doc(db, 'cronogramas_delegado', userId);
+    await setDoc(docRef, {
+      ...e,
+      lastUpdated: new Date().toISOString()
+    });
+    showSyncStatus('Salvo na nuvem!', 'success');
+  } catch (error) {
+    console.error('Erro ao salvar:', error);
+    showSyncStatus('Erro ao sincronizar', 'error');
+  }
+}
+
+async function loadFromCloud() {
+  try {
+    showSyncStatus('Carregando da nuvem...', 'syncing');
+    const docRef = doc(db, 'cronogramas_delegado', userId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      e = {...e, ...data};
+      if (!e.obs) e.obs = {};
+      if (!e.cron.length) gen();
+      showSyncStatus('Carregado da nuvem!', 'success');
+    } else {
+      gen();
+      await saveToCloud();
+    }
+    isLoading = false;
+    rend();
+    setupRealtimeSync();
+  } catch (error) {
+    console.error('Erro ao carregar:', error);
+    showSyncStatus('Erro ao carregar', 'error');
+    ld();
+    isLoading = false;
+    rend();
+  }
+}
+
+function setupRealtimeSync() {
+  const docRef = doc(db, 'cronogramas_delegado', userId);
+  onSnapshot(docRef, (doc) => {
+    if (doc.exists() && !isLoading) {
+      const data = doc.data();
+      const currentUpdate = e.lastUpdated || '';
+      const cloudUpdate = data.lastUpdated || '';
+      if (cloudUpdate > currentUpdate) {
+        e = {...e, ...data};
+        rend();
+        ntf('🔄 Atualizado de outro dispositivo!');
+      }
+    }
+  });
+}
+
+function sv(){
+  saveToCloud();
+  try{localStorage.setItem('cron_delegado',JSON.stringify(e))}catch{}
+}
+
+function ld(){
+  try{
+    const s=localStorage.getItem('cron_delegado');
+    if(s)e={...e,...JSON.parse(s)};
+    if(!e.obs)e.obs={}
+  }catch{}
+  if(!e.cron.length)gen()
+}
+
+function addDias(data, dias) {
+  const result = new Date(data);
+  result.setDate(result.getDate() + dias);
+  return result;
+}
+
+function formatData(data) {
+  return data.toLocaleDateString('pt-BR');
+}
+
+function gen(){
+  const c = [];
+  let dataAtual = new Date(2026, 0, 22); // 22 de janeiro de 2026 (quarta)
+  let estudo = 1;
+  
+  // Dias de estudo: segunda (1), quarta (3), sexta (5)
+  const diasEstudo = [1, 3, 5];
+  
+  disciplinas.forEach(materia => {
+    materia.aulas.forEach(aula => {
+      // Ajusta para o próximo dia de estudo
+      while (!diasEstudo.includes(dataAtual.getDay())) {
+        dataAtual = addDias(dataAtual, 1);
+      }
+      
+      c.push({
+        e: estudo,
+        dt: formatData(dataAtual),
+        disc: materia.disc,
+        av: materia.av,
+        mat: materia.nome,
+        aula: aula,
+        c: false
+      });
+      
+      estudo++;
+      dataAtual = addDias(dataAtual, 1);
+    });
+  });
+  
+  e.cron = c;
+  sv();
+}
+
+function ntf(msg,tp='ok'){
+  const cor={ok:'bg-green-500',er:'bg-red-500'};
+  const dv=document.createElement('div');
+  dv.className=`${cor[tp]} text-white px-6 py-3 rounded-lg shadow-lg mb-2`;
+  dv.textContent=msg;
+  document.getElementById('n').appendChild(dv);
+  setTimeout(()=>dv.remove(),3000)
+}
+
+function getStatus(dataStr, completo) {
+  if (completo) return 'completo';
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const [dia, mes, ano] = dataStr.split('/');
+  const dataEstudo = new Date(ano, mes - 1, dia);
+  dataEstudo.setHours(0, 0, 0, 0);
+  return dataEstudo < hoje ? 'atrasado' : 'pendente';
+}
+
+function salvarObs(estudo, val) {
+  e.obs[estudo] = val;
+  sv();
+  ntf('💾 Observação salva!');
+}
+
+function cEstudo(idx) {
+  const est = e.cron[idx];
+  const obs = e.obs[est.e] || '';
+  
+  const ds = {
+    id: Date.now(),
+    dt: new Date().toLocaleDateString('pt-BR'),
+    e: est.e,
+    mat: est.mat,
+    aula: est.aula,
+    obs: obs
+  };
+  
+  e.estudos.push(ds);
+  e.stats.a++;
+  e.stats.e++;
+  e.cron[idx].c = true;
+  
+  // Cria 2 revisões
+  const [dia, mes, ano] = est.dt.split('/');
+  const dataBase = new Date(ano, mes - 1, dia);
+  
+  [{t: '1ª Rev (10d)', dias: 10, cor: 'orange'},
+   {t: '2ª Rev (20d)', dias: 20, cor: 'purple'}].forEach(r => {
+    const dataRev = addDias(dataBase, r.dias);
+    e.revs.push({
+      id: `${ds.id}-${r.t}`,
+      ei: ds.id,
+      mat: est.mat,
+      aula: est.aula,
+      obs: obs,
+      dr: formatData(dataRev),
+      t: r.t,
+      s: 'p',
+      cor: r.cor
+    });
+  });
+  
+  sv();
+  rend();
+  ntf(`🎉 Estudo ${est.e} concluído!`);
+}
+
+function mkR(id) {
+  const r = e.revs.find(x => x.id === id);
+  if (r) {
+    r.s = 'c';
+    e.stats.r++;
+    sv();
+    rend();
+    ntf('✅ Revisão concluída!');
+  }
+}
+
+function editData(id) {
+  const r = e.revs.find(x => x.id === id);
+  if (!r) return;
+  const novaData = prompt('📅 Nova data da revisão (dd/mm/aaaa):', r.dr);
+  if (novaData && /^\d{2}\/\d{2}\/\d{4}$/.test(novaData)) {
+    r.dr = novaData;
+    sv();
+    rend();
+    ntf('📅 Data atualizada!');
+  } else if (novaData) {
+    ntf('❌ Formato inválido! Use dd/mm/aaaa', 'er');
+  }
+}
+
+function exp() {
+  const b = new Blob([JSON.stringify(e, null, 2)], {type: 'application/json'});
+  const u = URL.createObjectURL(b);
+  const a = document.createElement('a');
+  a.href = u;
+  a.download = `backup-delegado-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(u);
+  ntf('💾 Exportado!');
+}
+
+function imp(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = x => {
+    try {
+      e = {...e, ...JSON.parse(x.target.result)};
+      if (!e.obs) e.obs = {};
+      sv();
+      rend();
+      ntf('📥 Importado!');
+    } catch {
+      ntf('❌ Erro', 'er');
+    }
+  };
+  r.readAsText(f);
+}
+
+function rst() {
+  if (confirm('⚠️ Resetar tudo? Isto apagará os dados da nuvem!')) {
+    saveToCloud().then(() => {
+      localStorage.removeItem('cron_delegado');
+      location.reload();
+    });
+  }
+}
+
+function showUserId() {
+  const newId = prompt('🆔 Seu ID de usuário (copie para usar em outro dispositivo):', userId);
+  if (newId && newId !== userId && confirm('Deseja trocar para este ID?')) {
+    userId = newId;
+    localStorage.setItem('userId_delegado', userId);
+    location.reload();
+  }
+}
+
+function rend() {
+  const pd = e.revs.filter(x => x.s === 'p').length;
+  const totalAulas = disciplinas.reduce((sum, d) => sum + d.aulas.length, 0);
+  const pg = (e.stats.a / totalAulas * 100).toFixed(1);
+  
+  // Agrupa por mês
+  const meses = {};
+  e.cron.forEach(est => {
+    const [dia, mes, ano] = est.dt.split('/');
+    const chave = `${mes}/${ano}`;
+    if (!meses[chave]) meses[chave] = [];
+    meses[chave].push(est);
+  });
+  
+  const nomesMeses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  
+  document.getElementById('app').innerHTML = `
+<div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+  <div class="flex justify-between items-start gap-4 mb-6 flex-wrap">
+    <div>
+      <h1 class="text-3xl font-bold">🎓 Formação Delegado PC SP 2026</h1>
+      <p class="text-gray-600">Curso de Formação - 3x por semana ☁️</p>
+      <button onclick="showUserId()" class="text-xs text-blue-600 hover:underline mt-1">🆔 ID: ${userId.substr(0, 15)}...</button>
+    </div>
+    <div class="flex gap-2 flex-wrap">
+      <button onclick="exp()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm font-medium">💾 Exportar</button>
+      <label class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 text-sm font-medium cursor-pointer">📥 Importar<input type="file" accept=".json" onchange="imp(event)" class="hidden"></label>
+      <button onclick="rst()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 text-sm font-medium">🔄 Resetar</button>
+    </div>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="bg-gradient-to-br from-indigo-100 to-indigo-200 p-4 rounded-xl">
+      <p class="text-sm font-bold text-indigo-900 mb-1">📚 Aulas</p>
+      <p class="text-3xl font-bold text-indigo-700">${e.stats.a}</p>
+      <p class="text-xs text-indigo-600">de ${totalAulas}</p>
+    </div>
+    <div class="bg-gradient-to-br from-green-100 to-green-200 p-4 rounded-xl">
+      <p class="text-sm font-bold text-green-900 mb-1">📅 Estudos</p>
+      <p class="text-3xl font-bold text-green-700">${e.stats.e}</p>
+      <p class="text-xs text-green-600">de ${e.cron.length}</p>
+    </div>
+    <div class="bg-gradient-to-br from-purple-100 to-purple-200 p-4 rounded-xl">
+      <p class="text-sm font-bold text-purple-900 mb-1">📊 Progresso</p>
+      <p class="text-3xl font-bold text-purple-700">${pg}%</p>
+    </div>
+    <div class="bg-gradient-to-br from-orange-100 to-orange-200 p-4 rounded-xl">
+      <p class="text-sm font-bold text-orange-900 mb-1">🔔 Revisões</p>
+      <p class="text-3xl font-bold text-orange-700">${pd}</p>
+      <p class="text-xs text-orange-600">${e.stats.r} completas</p>
+    </div>
+  </div>
+</div>
+
+<div class="bg-white rounded-t-2xl shadow-xl">
+  <div class="flex border-b overflow-x-auto">
+    <button onclick="e.aba='plano';rend()" class="flex-1 px-6 py-4 font-bold whitespace-nowrap ${e.aba === 'plano' ? 'tab-active' : 'text-gray-600 hover:text-gray-800'}">📋 Cronograma</button>
+    <button onclick="e.aba='revs';rend()" class="flex-1 px-6 py-4 font-bold whitespace-nowrap relative ${e.aba === 'revs' ? 'tab-active' : 'text-gray-600 hover:text-gray-800'}">🔄 Revisões${pd > 0 ? `<span class="absolute top-2 right-2 bg-orange-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">${pd}</span>` : ''}</button>
+  </div>
+</div>
+
+<div class="bg-white rounded-b-2xl shadow-xl p-6 mb-6">
+  ${e.aba === 'plano' ? `
+    <div>
+      <h2 class="text-2xl font-bold mb-4">📋 Cronograma 2026</h2>
+      <p class="text-sm text-gray-600 mb-6 bg-indigo-50 border-2 border-indigo-200 p-3 rounded-lg">
+        <strong>3x por semana</strong> (Seg, Qua, Sex) • <strong>${e.cron.length} estudos</strong> • Janeiro a Julho
+      </p>
+      ${Object.keys(meses).map(mesAno => {
+        const estudos = meses[mesAno];
+        const [mes, ano] = mesAno.split('/');
+        const concluidos = estudos.filter(x => x.c).length;
+        const prog = (concluidos / estudos.length * 100).toFixed(0);
+        
+        return `
+          <div class="mb-8">
+            <div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+              <h3 class="text-xl font-bold">📅 ${nomesMeses[parseInt(mes) - 1]} ${ano}</h3>
+              <div class="flex items-center gap-3">
+                <span class="text-sm text-gray-600">${concluidos}/${estudos.length}</span>
+                <span class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg font-bold">${prog}%</span>
+              </div>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
+              <div class="bg-gradient-to-r from-indigo-500 to-purple-600 h-2 rounded-full transition-all" style="width:${prog}%"></div>
+            </div>
+            <div class="space-y-3">
+              ${estudos.map(est => {
+                const idx = e.cron.findIndex(x => x.e === est.e);
+                const obsv = e.obs[est.e] || '';
+                const status = getStatus(est.dt, est.c);
+                const cores = {
+                  pendente: {border: 'border-yellow-300', bg: 'bg-yellow-50', btn: 'bg-yellow-500 hover:bg-yellow-600'},
+                  completo: {border: 'border-green-300', bg: 'bg-green-50', btn: 'bg-green-500'},
+                  atrasado: {border: 'border-red-300', bg: 'bg-red-50', btn: 'bg-red-500 hover:bg-red-600'}
+                };
+                const cor = cores[status];
+                
+                return `
+                  <div class="border-2 ${cor.border} ${cor.bg} rounded-xl p-4 hover:shadow-lg transition-all">
+                    <div class="flex justify-between gap-3 mb-3">
+                      <div class="flex-1 min-w-0">
+                        <div class="flex gap-2 mb-2 flex-wrap">
+                          <span class="bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold">Estudo ${est.e}</span>
+                          <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">${est.dt}</span>
+                          <span class="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs">Disc. ${est.disc}</span>
+                          <span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">Av-${est.av}</span>
+                          ${status === 'atrasado' ? '<span class="bg-red-600 text-white px-2 py-1 rounded text-xs font-bold animate-pulse">⚠️ Atrasado</span>' : ''}
+                        </div>
+                        <h4 class="font-bold text-gray-800 mb-1 ${est.c ? 'line-through opacity-60' : ''} break-words">${est.mat}</h4>
+                        <p class="text-sm text-gray-600 ${est.c ? 'line-through opacity-60' : ''}">${est.aula}</p>
+                      </div>
+                      ${!est.c ? `
+                        <button onclick="cEstudo(${idx})" class="${cor.btn} text-white px-4 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 shadow-md">✅ Concluí</button>
+                      ` : `
+                        <span class="bg-green-500 text-white px-4 py-2.5 rounded-lg text-sm font-bold flex items-center gap-1 whitespace-nowrap flex-shrink-0">✓ Feito</span>
+                      `}
+                    </div>
+                    <div class="mt-3 pt-3 border-t ${status === 'completo' ? 'border-green-200' : 'border-gray-200'}">
+                      <label class="block text-xs font-bold text-gray-700 mb-1">📝 Observações:</label>
+                      <textarea class="w-full border-2 border-gray-300 rounded-lg p-2 text-sm focus:border-indigo-500 focus:outline-none ${est.c ? 'bg-gray-50 opacity-60' : ''}" 
+                        placeholder="Ex: Ver slides 10-15, revisar art. 121 CP"
+                        onchange="salvarObs(${est.e}, this.value)"
+                        ${est.c ? 'disabled' : ''}>${obsv}</textarea>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  ` : ''}
+  
+  ${e.aba === 'revs' ? `
+    <div>
+      <h2 class="text-2xl font-bold mb-4">🔄 Revisões Programadas</h2>
+      ${e.revs.length === 0 ? `
+        <div class="text-center py-16 bg-gray-50 rounded-xl">
+          <span class="text-6xl block mb-3">🔄</span>
+          <p class="text-gray-500 text-lg">Nenhuma revisão ainda</p>
+          <p class="text-gray-400 text-sm mt-2">Conclua estudos no Cronograma!</p>
+        </div>
+      ` : `
+        <div class="mb-8">
+          <h3 class="text-lg font-bold text-orange-900 mb-4 flex items-center gap-2">
+            <span class="text-2xl">⏰</span>Pendentes (${e.revs.filter(x => x.s === 'p').length})
+          </h3>
+          ${e.revs.filter(x => x.s === 'p').length === 0 ? `
+            <p class="text-gray-500 text-center py-8 bg-gray-50 rounded-lg">Nenhuma revisão pendente!</p>
+          ` : `
+            <div class="space-y-3">
+              ${e.revs.filter(x => x.s === 'p').sort((a, b) => {
+                const [dA, mA, aA] = a.dr.split('/');
+                const [dB, mB, aB] = b.dr.split('/');
+                return new Date(aA, mA - 1, dA) - new Date(aB, mB - 1, dB);
+              }).map(r => `
+                <div class="border-l-4 border-${r.cor}-500 bg-white rounded-xl p-5 hover:shadow-xl transition-all">
+                  <div class="flex flex-col md:flex-row justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-2">
+                        <span class="text-2xl">📅</span>
+                        <strong class="text-xl">${r.dr}</strong>
+                        <button onclick="editData('${r.id}')" class="ml-2 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded" title="Editar data">✏️</button>
+                      </div>
+                      <h4 class="font-bold text-lg mb-1 break-words">${r.mat}</h4>
+                      <p class="text-sm text-gray-600 mb-2">${r.aula}</p>
+                      <div class="flex gap-2 flex-wrap text-xs mb-3">
+                        <span class="bg-${r.cor}-100 text-${r.cor}-700 px-3 py-1 rounded-lg font-bold">${r.t}</span>
+                      </div>
+                      ${r.obs ? `
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-2 mt-2">
+                          <p class="text-xs font-bold text-blue-900 mb-1">📝 Observações:</p>
+                          <p class="text-sm text-blue-800 whitespace-pre-wrap">${r.obs}</p>
+                        </div>
+                      ` : ''}
+                    </div>
+                    <button onclick="mkR('${r.id}')" class="bg-gradient-to-r from-${r.cor}-500 to-${r.cor}-600 text-white px-6 py-3 rounded-lg hover:shadow-lg font-bold whitespace-nowrap flex-shrink-0">✓ Revisei</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+        
+        ${e.revs.filter(x => x.s === 'c').length > 0 ? `
+          <div>
+            <h3 class="text-lg font-bold text-green-900 mb-4 flex items-center gap-2">
+              <span class="text-2xl">✅</span>Concluídas (${e.revs.filter(x => x.s === 'c').length})
+            </h3>
+            <div class="max-h-80 overflow-y-auto space-y-2">
+              ${e.revs.filter(x => x.s === 'c').sort((a, b) => {
+                const [dA, mA, aA] = a.dr.split('/');
+                const [dB, mB, aB] = b.dr.split('/');
+                return new Date(aB, mB - 1, dB) - new Date(aA, mA - 1, dA);
+              }).map(r => `
+                <div class="border-l-4 border-green-500 bg-green-50 rounded-xl p-4 opacity-75">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span>📅</span>
+                    <strong>${r.dr}</strong>
+                  </div>
+                  <h4 class="font-bold line-through text-gray-700">${r.mat}</h4>
+                  <p class="text-sm line-through text-gray-600">${r.aula}</p>
+                  <div class="flex gap-2 text-xs mt-2">
+                    <span class="bg-green-100 text-green-700 px-2 py-1 rounded">${r.t}</span>
+                  </div>
+                  ${r.obs ? `
+                    <div class="bg-gray-100 rounded p-2 mt-2 text-xs text-gray-600 whitespace-pre-wrap">${r.obs}</div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      `}
+    </div>
+  ` : ''}
+</div>
+
+<div class="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-xl p-6">
+  <h3 class="font-bold text-blue-900 mb-3 text-lg">💡 Como Funciona</h3>
+  <div class="grid md:grid-cols-2 gap-4 text-sm text-blue-900">
+    <div class="bg-white/50 rounded-lg p-3">
+      <p class="font-bold mb-2">📋 Cronograma:</p>
+      <ul class="space-y-1 text-xs">
+        <li>• 3x por semana (Seg, Qua, Sex)</li>
+        <li>• ${e.cron.length} estudos até julho</li>
+        <li>• Anote observações importantes</li>
+        <li>• Clique "✅ Concluí" após estudar</li>
+        <li>• 2 revisões automáticas</li>
+      </ul>
+    </div>
+    <div class="bg-white/50 rounded-lg p-3">
+      <p class="font-bold mb-2">🔄 Revisões:</p>
+      <ul class="space-y-1 text-xs">
+        <li>• 📅 1ª revisão em 10 dias</li>
+        <li>• 📅 2ª revisão em 20 dias</li>
+        <li>• Suas observações aparecem!</li>
+        <li>• Pode editar as datas</li>
+      </ul>
+    </div>
+  </div>
+  <div class="mt-4 bg-green-50 border-2 border-green-300 rounded-lg p-3">
+    <p class="font-bold text-green-900 mb-2">☁️ Sincronização Automática:</p>
+    <ul class="space-y-1 text-xs text-green-800">
+      <li>✅ Dados salvos automaticamente na nuvem</li>
+      <li>✅ Acesse de qualquer dispositivo</li>
+      <li>✅ Atualizações em tempo real</li>
+      <li>✅ Clique no ID para usar em outro aparelho</li>
+    </ul>
+  </div>
+  <p class="mt-3 text-xs text-blue-800 bg-yellow-50 border border-yellow-300 p-2 rounded">
+    <strong>💾 Dica:</strong> Guarde seu ID de usuário para sincronizar entre dispositivos!
+  </p>
+</div>
+`;
+
+  window.cEstudo = cEstudo;
+  window.mkR = mkR;
+  window.editData = editData;
+  window.salvarObs = salvarObs;
+  window.exp = exp;
+  window.imp = imp;
+  window.rst = rst;
+  window.showUserId = showUserId;
+  window.e = e;
+  window.rend = rend;
+}
+
+loadFromCloud();
+</script>
+</body>
+</html>
